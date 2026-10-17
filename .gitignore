@@ -1,0 +1,44 @@
+# Build outputs and local tools
+.build/
+dist/
+build/
+work/
+outputs/
+*.app/
+*.dSYM/
+*.zip
+.DS_Store
+.swiftpm/
+xcuserdata/
+
+# Credentials, local configuration and signing material
+.env
+.env.*
+!.env.example
+auth.json
+credentials.json
+config.local.*
+server.token
+*.key
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+
+# Personal usage exports, logs, databases and investigation snapshots
+quotas.json
+daily-usage.json
+quota-api-verification.json
+*-check.json
+*.csv
+*.jsonl
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+Screenshots/
+screenshots/
+/额度页面.png
+/每日用量页面.png
+/深色用量页面.png
