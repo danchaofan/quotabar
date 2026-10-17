@@ -11,7 +11,7 @@ A native macOS menu bar app for tracking AI quotas and daily token usage across 
 - **每日用量**：按系统时区汇总最近 30 天的本机记录，提供 7 天趋势、来源明细及 CSV 导出。
 - **自动刷新**：额度默认每 5 分钟更新，本机用量每分钟检查；支持手动刷新、失败退避和过期标记。
 - **菜单栏选项**：仅显示图标，或固定显示某项剩余额度；支持开机启动及可选的低额度提醒。
-- **原生体验**：Swift、SwiftUI 与 AppKit，支持浅色和深色模式。
+- **原生体验**：Swift、SwiftUI 与 AppKit，支持浅色和深色模式；统一卡片与状态标识，提供用量总览和可选日期的趋势图。
 
 ## 环境要求
 

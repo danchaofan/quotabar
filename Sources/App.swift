@@ -17,7 +17,7 @@ import SwiftUI
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         popover.behavior = .transient; popover.animates = true
-        popover.contentSize = NSSize(width: 410, height: 660)
+        popover.contentSize = NSSize(width: 424, height: 720)
         popover.contentViewController = NSHostingController(rootView: DashboardView(model: model, openSettings: { [weak self] in self?.showSettings() }))
         model.menuChanged = { [weak self] in self?.updateMenu() }
         reopenObserver = DistributedNotificationCenter.default().addObserver(forName: Notification.Name("com.local.QuotaBar.show"), object: nil, queue: .main) { [weak self] _ in Task { @MainActor [weak self] in self?.showPopover() } }
@@ -46,7 +46,7 @@ import SwiftUI
     @objc func showSettings() {
         popover.performClose(nil)
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 530, height: 650), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 530, height: 690), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "额度看板设置"; window.isReleasedWhenClosed = false
             window.contentView = NSHostingView(rootView: SettingsView(model: model)); window.center(); settingsWindow = window
         }
@@ -83,7 +83,7 @@ import SwiftUI
             }
             model.page = args.contains("--usage-page") ? 1 : 0
             if args.contains("--dark") { app.appearance = NSAppearance(named: .darkAqua) } else { app.appearance = NSAppearance(named: .aqua) }
-            let size = args.contains("--settings-page") ? NSSize(width: 530, height: 650) : NSSize(width: 410, height: 660)
+            let size = args.contains("--settings-page") ? NSSize(width: 530, height: 690) : NSSize(width: 424, height: 720)
             let dark = args.contains("--dark")
             let root = args.contains("--settings-page") ? AnyView(SettingsView(model: model)) : AnyView(DashboardView(model: model))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
