@@ -22,7 +22,7 @@ enum LocalPaths {
     static var codex: URL { root("CODEX_HOME", ".codex") }
     static var kimi: URL { root("KIMI_CODE_HOME", ".kimi-code") }
     static var zcode: URL { home.appendingPathComponent(".zcode") }
-    static var pi: URL { home.appendingPathComponent(".pi/agent") }
+    static var pi: URL { root("PI_CODING_AGENT_DIR", ".pi/agent") }
     static func root(_ environment: String, _ fallback: String) -> URL {
         if let path = ProcessInfo.processInfo.environment[environment], !path.isEmpty { return URL(fileURLWithPath: path) }
         return home.appendingPathComponent(fallback)

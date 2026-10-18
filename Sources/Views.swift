@@ -399,7 +399,7 @@ struct UsageVendorRow: View {
             if rows.isEmpty {
                 Text(health.contains { $0.available } ? "当天暂无本机用量记录" : "尚未连接可计量的本机记录").foregroundColor(.secondary)
             }
-            ForEach(health.filter { !$0.available || $0.records == 0 }) { item in
+            ForEach(health) { item in
                 Text(item.title + "：" + item.note).foregroundColor(.secondary)
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -416,6 +416,8 @@ struct UsageVendorRow: View {
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @State private var key = ""
+    @State private var piUsagePaths = UserDefaults.standard.stringArray(forKey: "piUsageDirectories") ?? []
+    @State private var kimiUsagePaths = UserDefaults.standard.stringArray(forKey: "kimiUsageDirectories") ?? []
     @State private var startup = SMAppService.mainApp.status == .enabled
     var body: some View {
         VStack(spacing: 0) {
@@ -457,12 +459,39 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) { Text(source.title).font(.system(size: 11, weight: .medium)); Text(source.note).font(.system(size: 10)).foregroundColor(.secondary) }
                     }
                 }
+                Text("自动识别 Codex 会话工作目录中的 work/runtime/pi 和 work/runtime/kimi。其他位置可手动添加会话目录。").font(.system(size: 11)).foregroundColor(.secondary)
+                usageDirectoryRows("pi + GLM", key: "piUsageDirectories", paths: $piUsagePaths)
+                usageDirectoryRows("Kimi", key: "kimiUsageDirectories", paths: $kimiUsagePaths)
                 Text("只读扫描本机记录，仅保存数值汇总，不保存对话正文。缓存 token 属于输入，推理 token 属于输出。普通 ChatGPT 聊天不提供精确 token 记录。").font(.system(size: 10)).foregroundColor(.secondary)
             }
             if !model.connectionMessage.isEmpty { Text(model.connectionMessage).font(.system(size: 11)).foregroundColor(.secondary) }
-            HStack { Text("额度看板 1.0.4 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
+            HStack { Text("额度看板 1.0.5 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
             }.formStyle(.grouped)
         }.frame(width: 530, height: 690).background(Palette.canvas).tint(Palette.accent)
+    }
+    private func usageDirectoryRows(_ title: String, key: String, paths: Binding<[String]>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).font(.system(size: 11, weight: .medium)); Spacer()
+                Button {
+                    let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false; panel.title = "选择 " + title + " 会话目录"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        let values = UsageLocations.unique(paths.wrappedValue.map { URL(fileURLWithPath: $0) } + [url]).map { $0.path }
+                        paths.wrappedValue = values; UserDefaults.standard.set(values, forKey: key); model.scanUsage()
+                    }
+                } label: { Text("添加会话目录…").foregroundColor(.primary) }.font(.system(size: 11))
+            }
+            ForEach(paths.wrappedValue, id: \.self) { path in
+                HStack(alignment: .top) {
+                    Text(path).font(.system(size: 10)).foregroundColor(.secondary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 6)
+                    Button {
+                        paths.wrappedValue.removeAll { $0 == path }; UserDefaults.standard.set(paths.wrappedValue, forKey: key); model.scanUsage()
+                    } label: { Image(systemName: "minus.circle").foregroundColor(.secondary) }.buttonStyle(.plain).help("移除此会话目录")
+                }
+            }
+        }
     }
     private func executableRow(_ title: String, name: String) -> some View {
         HStack {

@@ -102,6 +102,37 @@ enum SelfTests {
         } catch { failures.append("Finder runtime fixture failed") }
         check("CLI exit 127 reports missing runtime", CodexRPC.failureMessage(initialized: false, exitCode: 127).contains("Node.js"))
         check("Quota timeout does not imply expired login", !CodexRPC.failureMessage(initialized: true, exitCode: nil).contains("登录"))
+        do {
+            let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("quotabar-project-usage-" + UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: fixture) }
+            let project = fixture.appendingPathComponent("project")
+            let codex = fixture.appendingPathComponent("codex"), pi = fixture.appendingPathComponent("pi"), kimi = fixture.appendingPathComponent("kimi"), zcode = fixture.appendingPathComponent("zcode")
+            let piSessions = project.appendingPathComponent("work/runtime/pi/sessions")
+            let kimiSessions = project.appendingPathComponent("work/runtime/kimi/sessions")
+            let stamp = ISO8601DateFormatter().string(from: Date())
+            func writeRows(_ rows: [[String: Any]], to file: URL) throws {
+                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                var data = Data()
+                for row in rows { data.append(try JSONSerialization.data(withJSONObject: row)); data.append(10) }
+                try data.write(to: file)
+            }
+            let piRow: [String: Any] = ["type": "message", "id": "project-fixture", "timestamp": stamp, "message": ["role": "assistant", "provider": "zai", "model": "glm-fixture", "usage": ["input": 10, "output": 20, "cacheRead": 80, "cacheWrite": 10]] as [String: Any]]
+            try writeRows([["type": "session_meta", "timestamp": stamp, "payload": ["id": "fixture-workspace", "cwd": project.path]]], to: codex.appendingPathComponent("sessions/meta.jsonl"))
+            try writeRows([piRow], to: piSessions.appendingPathComponent("usage.jsonl"))
+            try writeRows([["type": "usage.record", "time": Date().timeIntervalSince1970 * 1000, "agentId": "main", "usage": ["inputOther": 10, "inputCacheRead": 80, "inputCacheCreation": 10, "output": 20]]], to: kimiSessions.appendingPathComponent("session_fixture/agents/main/wire.jsonl"))
+            try writeRows([piRow.merging(["id": "excluded-fixture"]) { _, new in new }], to: project.appendingPathComponent("work/tmp/fake-session.jsonl"))
+            let scanner = UsageScanner(codexRoot: codex, kimiRoot: kimi, piRoot: pi, zcodeRoot: zcode, extraRoots: [:])
+            let first = scanner.blockingScan(), day = Values.day(Date())
+            check("Discover project-local GLM usage from Codex workspace metadata", first.totals(day: day, vendor: .glm).total == 120)
+            check("Discover project-local Kimi usage from Codex workspace metadata", first.totals(day: day, vendor: .kimi).total == 120)
+            let second = scanner.blockingScan()
+            check("Memoized Codex metadata retains project discovery", second.totals(day: day, vendor: .glm).total == 120 && second.totals(day: day, vendor: .kimi).total == 120)
+            let overlapping = UsageScanner(codexRoot: codex, kimiRoot: kimi, piRoot: project.appendingPathComponent("work/runtime/pi"), zcodeRoot: zcode, extraRoots: [.glm: [piSessions], .kimi: [kimiSessions]]).blockingScan()
+            check("Overlapping default, discovered and custom roots count files once", overlapping.totals(day: day, vendor: .glm).requests == 1 && overlapping.sources.first { $0.id == "pi" }?.records == 1)
+            let custom = UsageScanner(codexRoot: fixture.appendingPathComponent("no-codex"), kimiRoot: kimi, piRoot: pi, zcodeRoot: zcode, extraRoots: [.glm: [piSessions.deletingLastPathComponent()]]).blockingScan()
+            check("Custom CLI data root accepts its sessions subdirectory", custom.totals(day: day, vendor: .glm).total == 120)
+            check("Project discovery excludes arbitrary temporary transcripts", first.totals(day: day, vendor: .glm).requests == 1)
+        } catch { failures.append("Project-local usage fixture failed") }
         if failures.isEmpty { print("PASS: \(count) accounting, quota and deduplication checks") }
         else { for failure in failures { print("FAIL: " + failure) } }
         return failures.isEmpty

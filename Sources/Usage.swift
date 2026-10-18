@@ -41,9 +41,34 @@ enum UsageParsing {
     }
 }
 
+enum UsageLocations {
+    static func unique(_ roots: [URL]) -> [URL] {
+        var seen = Set<String>()
+        return roots.map { $0.resolvingSymlinksInPath().standardizedFileURL }.filter { seen.insert($0.path).inserted }
+    }
+    static func projectRoots(_ workspaces: Set<String>, vendor: Vendor) -> [URL] {
+        let client = vendor == .kimi ? "kimi" : "pi"
+        return unique(workspaces.sorted().map { URL(fileURLWithPath: $0).appendingPathComponent("work/runtime/\(client)/sessions") })
+    }
+    static func configuredRoots(_ vendor: Vendor) -> [URL] {
+        let key = vendor == .kimi ? "kimiUsageDirectories" : "piUsageDirectories"
+        return (UserDefaults.standard.stringArray(forKey: key) ?? []).map { URL(fileURLWithPath: $0) }
+    }
+    static func sessionDirectory(_ root: URL) -> URL {
+        let sessions = root.appendingPathComponent("sessions")
+        return FileManager.default.fileExists(atPath: sessions.path) ? sessions : root
+    }
+}
+
 final class UsageScanner {
-    private struct Memo { let size: Int; let modified: Date; let events: [TokenEvent] }
+    private struct Memo { let size: Int; let modified: Date; let events: [TokenEvent]; let workspaces: Set<String> }
     private var memo: [String: Memo] = [:]
+    private var workspaces = Set<String>()
+    private let codexRoot: URL, kimiRoot: URL, piRoot: URL, zcodeRoot: URL
+    private let extraRoots: [Vendor: [URL]]?
+    init(codexRoot: URL = LocalPaths.codex, kimiRoot: URL = LocalPaths.kimi, piRoot: URL = LocalPaths.pi, zcodeRoot: URL = LocalPaths.zcode, extraRoots: [Vendor: [URL]]? = nil) {
+        self.codexRoot = codexRoot; self.kimiRoot = kimiRoot; self.piRoot = piRoot; self.zcodeRoot = zcodeRoot; self.extraRoots = extraRoots
+    }
     private let queue = DispatchQueue(label: "com.local.QuotaBar.usage", qos: .utility)
     func scan() async -> UsageSnapshot {
         await withCheckedContinuation { continuation in queue.async { continuation.resume(returning: self.blockingScan()) } }
@@ -71,17 +96,19 @@ final class UsageScanner {
     private func logEvents(_ file: URL, kind: Vendor, cutoff: Date) -> [TokenEvent] {
         let path = file.resolvingSymlinksInPath().path
         guard let meta = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]), let size = meta.fileSize, let modified = meta.contentModificationDate else { return [] }
-        if let old = memo[path], old.size == size, old.modified == modified { return old.events.filter { $0.date >= cutoff } }
+        if let old = memo[path], old.size == size, old.modified == modified { workspaces.formUnion(old.workspaces); return old.events.filter { $0.date >= cutoff } }
         var events: [TokenEvent] = [], legacy: [TokenEvent] = []
         var firstCanonicalDate: Date?
+        var fileWorkspaces = Set<String>()
         var source = "Codex 桌面 / CLI", session = file.deletingPathExtension().lastPathComponent
         var previousInput: Int64 = 0, previousOutput: Int64 = 0, previousRead: Int64 = 0, previousWrite: Int64 = 0
         var hasParent = false, sawLegacy = false, provider = "", model = ""
-        if kind == .kimi { session = file.pathComponents.first(where: { $0.hasPrefix("session_") }) ?? session }
+        if kind == .kimi { session = file.pathComponents.first(where: { $0.hasPrefix("session_") }) ?? file.deletingLastPathComponent().resolvingSymlinksInPath().path }
         readLines(file) { row, line in
             let type = row["type"] as? String ?? "", payload = Values.dictionary(row["payload"])
             if kind == .codex {
                 if type == "session_meta" {
+                    if let cwd = payload["cwd"] as? String, cwd.hasPrefix("/") { fileWorkspaces.insert(cwd) }
                     session = payload["id"] as? String ?? session
                     hasParent = payload["parent_thread_id"] != nil
                     let origin = (payload["originator"] as? String ?? "").lowercased()
@@ -114,11 +141,12 @@ final class UsageScanner {
             if let first = firstCanonicalDate { events = legacy.filter { $0.date < first } + events }
             else { events = legacy }
         }
-        memo[path] = Memo(size: size, modified: modified, events: events)
+        workspaces.formUnion(fileWorkspaces)
+        memo[path] = Memo(size: size, modified: modified, events: events, workspaces: fileWorkspaces)
         return events
     }
     private func zcodeEvents(cutoff: Date) throws -> [TokenEvent] {
-        let file = LocalPaths.zcode.appendingPathComponent("cli/db/db.sqlite")
+        let file = zcodeRoot.appendingPathComponent("cli/db/db.sqlite")
         var database: OpaquePointer?
         guard sqlite3_open_v2(file.path, &database, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
             if let database = database { sqlite3_close(database) }; throw QuotaError.message("ZCode 用量数据库暂不可读")
@@ -142,27 +170,42 @@ final class UsageScanner {
         guard result == SQLITE_DONE else { throw QuotaError.message("ZCode 数据库正忙，稍后重试") }
         return events
     }
-    private func blockingScan() -> UsageSnapshot {
+    // Production calls this on queue; offline fixtures use their own scanner instance.
+    func blockingScan() -> UsageSnapshot {
         let cutoff = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: -29, to: Date())!)
         var events: [TokenEvent] = [], health: [SourceHealth] = [], currentFiles = Set<String>()
-        let sources: [(String, Vendor, String, URL, String)] = [
-            ("codex", .codex, "Codex 桌面 / CLI", LocalPaths.codex.appendingPathComponent("sessions"), ".jsonl"),
-            ("kimi", .kimi, "Kimi 桌面 / CLI", LocalPaths.kimi.appendingPathComponent("sessions"), "wire.jsonl"),
-            ("pi", .glm, "pi + GLM", LocalPaths.pi.appendingPathComponent("sessions"), ".jsonl")
-        ]
-        for (id, vendor, title, root, suffix) in sources {
-            var found = files(root, suffix: suffix)
-            if vendor == .codex { found += files(LocalPaths.codex.appendingPathComponent("archived_sessions"), suffix: suffix) }
-            var count = 0
-            for file in found {
-                currentFiles.insert(file.resolvingSymlinksInPath().path)
-                let values = logEvents(file, kind: vendor, cutoff: cutoff); events += values; count += values.count
+        workspaces = []
+        func collect(_ roots: [URL], kind: Vendor, suffix: String) -> Int {
+            var count = 0, seen = Set<String>()
+            for root in UsageLocations.unique(roots) {
+                for file in files(root, suffix: suffix) {
+                    let path = file.resolvingSymlinksInPath().path
+                    guard seen.insert(path).inserted else { continue }
+                    currentFiles.insert(path)
+                    let values = logEvents(file, kind: kind, cutoff: cutoff)
+                    events += values; count += values.count
+                }
             }
-            let exists = FileManager.default.fileExists(atPath: root.path)
-            health.append(SourceHealth(id: id, vendor: vendor, title: title, available: exists, records: count, note: !exists ? "未发现本机会话目录" : count == 0 ? "目录已连接，最近 30 天暂无可计量记录" : "已连接 · 最近 30 天 \(count) 条用量记录"))
+            return count
+        }
+        // Read Codex metadata first, so project-local CLI runtimes can be discovered.
+        let codexSessions = codexRoot.appendingPathComponent("sessions")
+        let codexCount = collect([codexSessions, codexRoot.appendingPathComponent("archived_sessions")], kind: .codex, suffix: ".jsonl")
+        let codexExists = FileManager.default.fileExists(atPath: codexSessions.path)
+        health.append(SourceHealth(id: "codex", vendor: .codex, title: "Codex 桌面 / CLI", available: codexExists, records: codexCount, note: codexExists ? "已连接 · 最近 30 天 \(codexCount) 条用量记录" : "未发现本机会话目录"))
+        for vendor in [Vendor.kimi, .glm] {
+            let id = vendor == .kimi ? "kimi" : "pi", title = vendor == .kimi ? "Kimi 桌面 / CLI" : "pi + GLM"
+            let defaultRoot = (vendor == .kimi ? kimiRoot : piRoot).appendingPathComponent("sessions")
+            let configured = extraRoots.map { $0[vendor] ?? [] } ?? UsageLocations.configuredRoots(vendor)
+            var roots = [defaultRoot] + UsageLocations.projectRoots(workspaces, vendor: vendor) + configured.map(UsageLocations.sessionDirectory)
+            if vendor == .glm, extraRoots == nil, let custom = ProcessInfo.processInfo.environment["PI_CODING_AGENT_SESSION_DIR"], !custom.isEmpty { roots.append(URL(fileURLWithPath: custom)) }
+            roots = UsageLocations.unique(roots).filter { FileManager.default.fileExists(atPath: $0.path) }
+            let count = collect(roots, kind: vendor, suffix: vendor == .kimi ? "wire.jsonl" : ".jsonl")
+            let note = roots.isEmpty ? "未发现本机会话目录，可在下方添加自定义目录" : "已连接 \(roots.count) 个目录 · 最近 30 天 \(count) 条用量记录"
+            health.append(SourceHealth(id: id, vendor: vendor, title: title, available: !roots.isEmpty, records: count, note: note))
         }
         memo = memo.filter { currentFiles.contains($0.key) }
-        let database = LocalPaths.zcode.appendingPathComponent("cli/db/db.sqlite")
+        let database = zcodeRoot.appendingPathComponent("cli/db/db.sqlite")
         if FileManager.default.fileExists(atPath: database.path) {
             do { let values = try zcodeEvents(cutoff: cutoff); events += values; health.append(SourceHealth(id: "zcode", vendor: .glm, title: "ZCode", available: true, records: values.count, note: "只读连接 · 最近 30 天 \(values.count) 条用量记录")) }
             catch { health.append(SourceHealth(id: "zcode", vendor: .glm, title: "ZCode", available: false, records: 0, note: error.localizedDescription)) }

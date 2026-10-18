@@ -1,7 +1,7 @@
-额度看板 1.0.4
+额度看板 1.0.5
 
 安装与运行
-下载仓库 installers 目录中的 QuotaBar-1.0.4-universal.pkg，双击并按向导安装。支持 macOS 13 及以上的 Intel 和 Apple Silicon。
+下载仓库 installers 目录中的 QuotaBar-1.0.5-universal.pkg，双击并按向导安装。支持 macOS 13 及以上的 Intel 和 Apple Silicon。
 升级前先退出正在运行的额度看板。安装位置为 /Applications/额度看板.app，原有设置与用量汇总会保留。
 在「应用程序」中打开「额度看板」。软件只显示在屏幕顶部菜单栏，不显示 Dock 图标。
 点击菜单栏柱状图图标打开面板；点击面板外自动收起。右键图标可刷新、设置或退出。
@@ -26,6 +26,7 @@ Kimi 优先查询已有的本地桌面/CLI 服务；没有可用服务时会临�
 每日用量
 每分钟检查本机记录；首次启动会回填现存的最近 30 天数据。
 支持日期切换、最近 7 天趋势、按服务/来源查看、导出 CSV。
+自动从 Codex 会话工作目录识别 work/runtime/pi/sessions 与 work/runtime/kimi/sessions，回填最近 30 天真实用量。其他自定义目录可在设置的「用量来源」中添加，重叠目录不会重复计数。
 输入 token 包含缓存，输出 token 包含服务已归入输出的推理 token。
 总 token = 输入（含缓存读取/写入）+ 输出；缓存和推理子项不再次相加。
 这不是积分扣费表，各平台的加权计费不能直接等同原始 token 数。
