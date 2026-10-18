@@ -79,6 +79,29 @@ enum SelfTests {
         check("Pi other providers filtered", UsageParsing.piRecord(["id": "p", "type": "usage", "provider": "other", "model": "other", "usage": ["input": 2]], provider: "", model: "") == nil)
         let zone = TimeZone(secondsFromGMT: 8 * 3600)!
         check("Day grouping respects local midnight", Values.day(Values.date("2024-01-02T16:00:01Z")!, zone: zone) == "2024-01-03")
+        // Reproduce Finder's minimal PATH with a synthetic npm-style CLI/runtime.
+        do {
+            let fixture = FileManager.default.temporaryDirectory.appendingPathComponent("quotabar-runtime-" + UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: fixture) }
+            let runtime = fixture.appendingPathComponent("bin")
+            let cli = fixture.appendingPathComponent("lib/node_modules/@openai/codex/bin/codex.js")
+            try FileManager.default.createDirectory(at: runtime, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: cli.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let node = runtime.appendingPathComponent("node")
+            try Data("#!/bin/sh\nprintf 'fixture-node\\n'\n".utf8).write(to: node)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: node.path)
+            let environment = LocalPaths.cliEnvironment(for: cli, inheriting: ["PATH": "/usr/bin:/bin", "QUOTABAR_FIXTURE": "retained"])
+            let process = Process(), output = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env"); process.arguments = ["node"]
+            process.environment = environment; process.standardOutput = output
+            process.standardError = FileHandle.nullDevice; process.standardInput = FileHandle.nullDevice
+            try process.run(); process.waitUntilExit()
+            let result = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
+            check("Finder PATH resolves the selected CLI's Node runtime", process.terminationStatus == 0 && result == "fixture-node\n")
+            check("CLI environment preserves inherited settings", environment["QUOTABAR_FIXTURE"] == "retained")
+        } catch { failures.append("Finder runtime fixture failed") }
+        check("CLI exit 127 reports missing runtime", CodexRPC.failureMessage(initialized: false, exitCode: 127).contains("Node.js"))
+        check("Quota timeout does not imply expired login", !CodexRPC.failureMessage(initialized: true, exitCode: nil).contains("登录"))
         if failures.isEmpty { print("PASS: \(count) accounting, quota and deduplication checks") }
         else { for failure in failures { print("FAIL: " + failure) } }
         return failures.isEmpty

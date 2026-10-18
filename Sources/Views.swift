@@ -460,7 +460,7 @@ struct SettingsView: View {
                 Text("只读扫描本机记录，仅保存数值汇总，不保存对话正文。缓存 token 属于输入，推理 token 属于输出。普通 ChatGPT 聊天不提供精确 token 记录。").font(.system(size: 10)).foregroundColor(.secondary)
             }
             if !model.connectionMessage.isEmpty { Text(model.connectionMessage).font(.system(size: 11)).foregroundColor(.secondary) }
-            HStack { Text("额度看板 1.0.3 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
+            HStack { Text("额度看板 1.0.4 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
             }.formStyle(.grouped)
         }.frame(width: 530, height: 690).background(Palette.canvas).tint(Palette.accent)
     }

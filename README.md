@@ -17,7 +17,7 @@ A native macOS menu bar app for tracking AI quotas and daily token usage across 
 
 支持 **macOS 13 及以上**，安装包为 **Universal 2**，同时支持 Intel 和 Apple Silicon。直接安装无需 Xcode 或 Command Line Tools。
 
-1. 下载 [QuotaBar 1.0.3 安装包](https://raw.githubusercontent.com/danchaofan/quotabar/main/installers/QuotaBar-1.0.3-universal.pkg)。
+1. 下载 [QuotaBar 1.0.4 安装包](https://raw.githubusercontent.com/danchaofan/quotabar/main/installers/QuotaBar-1.0.4-universal.pkg)。
 2. 如果已有旧版运行，先右键菜单栏图标，选择「退出额度看板」。
 3. 双击 `.pkg`，按安装向导完成安装。应用固定安装到 `/Applications/额度看板.app`，安装过程可能要求管理员密码。
 4. 在「应用程序」中打开「额度看板」。点击顶部菜单栏的柱状图图标使用；Dock 不显示图标。
@@ -26,10 +26,10 @@ A native macOS menu bar app for tracking AI quotas and daily token usage across 
 
 当前应用使用 ad-hoc 签名，安装包尚未使用 Apple Developer 分发签名或公证。如果 macOS 拦截安装或首次启动，请确认下载来自本仓库，再到「系统设置 → 隐私与安全性」选择「仍要打开」。
 
-安装包及其 [SHA-256 校验文件](installers/QuotaBar-1.0.3-universal.pkg.sha256) 均保存在仓库 `installers/` 中。将两者下载到同一目录后，可选运行：
+安装包及其 [SHA-256 校验文件](installers/QuotaBar-1.0.4-universal.pkg.sha256) 均保存在仓库 `installers/` 中。将两者下载到同一目录后，可选运行：
 
 ```sh
-shasum -a 256 -c QuotaBar-1.0.3-universal.pkg.sha256
+shasum -a 256 -c QuotaBar-1.0.4-universal.pkg.sha256
 ```
 
 ## 从源码构建
@@ -107,7 +107,7 @@ bash package.sh
 "dist/额度看板.app/Contents/MacOS/QuotaBar" --self-test
 ```
 
-当前包含 23 项额度解析、token 口径、去重、时区和进度条检查。
+当前包含 27 项额度解析、token 口径、去重、时区、进度条、CLI 运行环境与错误提示检查。
 
 以下命令只在你明确需要检查自己的本机数据时使用：
 

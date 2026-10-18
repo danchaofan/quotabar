@@ -32,6 +32,28 @@ enum LocalPaths {
         let paths = name == "codex" ? [override, home.appendingPathComponent(".local/bin/codex").path, "/opt/homebrew/bin/codex", "/usr/local/bin/codex"] : [override, kimi.appendingPathComponent("bin/kimi").path, "/opt/homebrew/bin/kimi", "/usr/local/bin/kimi"]
         return paths.first(where: { !$0.isEmpty && FileManager.default.isExecutableFile(atPath: $0) }).map { URL(fileURLWithPath: $0) }
     }
+    static func cliEnvironment(for binary: URL, inheriting base: [String: String] = ProcessInfo.processInfo.environment) -> [String: String] {
+        var environment = base
+        var paths = [binary.deletingLastPathComponent().path]
+        // npm launchers use /usr/bin/env node. Finder's PATH omits user runtimes.
+        // Prefer the Node installation containing the selected CLI, including nvm prefixes.
+        var ancestor = binary.resolvingSymlinksInPath().deletingLastPathComponent()
+        for _ in 0..<8 {
+            let runtime = ancestor.appendingPathComponent("bin")
+            if FileManager.default.isExecutableFile(atPath: runtime.appendingPathComponent("node").path) {
+                paths.insert(runtime.path, at: 0); break
+            }
+            let parent = ancestor.deletingLastPathComponent()
+            if parent.path == ancestor.path { break }
+            ancestor = parent
+        }
+        paths += [home.appendingPathComponent(".local/node/bin").path, home.appendingPathComponent(".local/bin").path, "/opt/homebrew/bin", "/usr/local/bin"]
+        paths += (base["PATH"] ?? "").split(separator: ":").map(String.init)
+        paths += ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        var seen = Set<String>()
+        environment["PATH"] = paths.filter { seen.insert($0).inserted }.joined(separator: ":")
+        return environment
+    }
     static var support: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("QuotaBar")
     }
@@ -170,14 +192,15 @@ enum CodexRPC {
         guard let binary = LocalPaths.executable("codex") else { throw QuotaError.message("未找到 Codex CLI，请在设置中选择命令位置") }
         let process = Process(), input = Pipe(), output = Pipe()
         process.executableURL = binary; process.arguments = ["app-server", "--listen", "stdio://"]
+        process.environment = LocalPaths.cliEnvironment(for: binary)
         process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
         try process.run(); ManagedChildren.shared.add(process)
         defer { try? input.fileHandleForWriting.close(); stopProcess(process); ManagedChildren.shared.remove(process); try? output.fileHandleForReading.close() }
         func send(_ item: [String: Any]) throws {
             var data = try JSONSerialization.data(withJSONObject: item); data.append(10); try input.fileHandleForWriting.write(contentsOf: data)
         }
-        try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "quotabar", "title": "额度看板", "version": "1.0.0"]]])
-        var buffer = Data(); let deadline = Date().addingTimeInterval(25)
+        try send(["id": 1, "method": "initialize", "params": ["clientInfo": ["name": "quotabar", "title": "额度看板", "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.4"]]])
+        var buffer = Data(); var initialized = false; let deadline = Date().addingTimeInterval(25)
         while Date() < deadline {
             var item = pollfd(fd: output.fileHandleForReading.fileDescriptor, events: Int16(POLLIN), revents: 0)
             let status = poll(&item, 1, 200)
@@ -191,11 +214,19 @@ enum CodexRPC {
                 guard let json = try? Values.json(line), let id = Values.number(json["id"]) else { continue }
                 if json["error"] != nil { throw QuotaError.message("Codex 查询失败，请确认 CLI 已登录 ChatGPT 账号") }
                 if id == 1 {
+                    initialized = true
                     try send(["method": "initialized"])
                     try send(["id": 2, "method": "account/rateLimits/read"])
                 } else if id == 2 { return json }
             }
         }
-        throw QuotaError.message("Codex 查询超时，请确认 CLI 已登录")
+        throw QuotaError.message(failureMessage(initialized: initialized, exitCode: process.isRunning ? nil : process.terminationStatus))
+    }
+    static func failureMessage(initialized: Bool, exitCode: Int32?) -> String {
+        if let code = exitCode {
+            if code == 127 { return "Codex CLI 启动失败，未找到 Node.js 等运行依赖，请检查命令位置" }
+            return "Codex CLI 提前退出（\(code)），请检查命令及运行环境"
+        }
+        return initialized ? "Codex 额度查询超时，将自动重试；请检查网络连接" : "Codex 本地服务启动超时，将自动重试"
     }
 }

@@ -1,7 +1,7 @@
-额度看板 1.0.3
+额度看板 1.0.4
 
 安装与运行
-下载仓库 installers 目录中的 QuotaBar-1.0.3-universal.pkg，双击并按向导安装。支持 macOS 13 及以上的 Intel 和 Apple Silicon。
+下载仓库 installers 目录中的 QuotaBar-1.0.4-universal.pkg，双击并按向导安装。支持 macOS 13 及以上的 Intel 和 Apple Silicon。
 升级前先退出正在运行的额度看板。安装位置为 /Applications/额度看板.app，原有设置与用量汇总会保留。
 在「应用程序」中打开「额度看板」。软件只显示在屏幕顶部菜单栏，不显示 Dock 图标。
 点击菜单栏柱状图图标打开面板；点击面板外自动收起。右键图标可刷新、设置或退出。
