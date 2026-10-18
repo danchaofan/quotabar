@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<installer-gui-script minSpecVersion="2">
+    <title>QuotaBar · 额度看板</title>
+    <welcome file="Welcome.html"/>
+    <conclusion file="Conclusion.html"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check><allowed-os-versions><os-version min="13.0"/></allowed-os-versions></volume-check>
+    <choices-outline><line choice="quotabar"/></choices-outline>
+    <choice id="quotabar" visible="false" title="额度看板">
+        <pkg-ref id="com.local.QuotaBar.pkg"/>
+    </choice>
+    <pkg-ref id="com.local.QuotaBar.pkg" version="@VERSION@" onConclusion="none">QuotaBar-component.pkg</pkg-ref>
+</installer-gui-script>

@@ -42,3 +42,7 @@ screenshots/
 /额度页面.png
 /每日用量页面.png
 /深色用量页面.png
+
+# Only intentional distributable installers belong in Git.
+*.pkg
+!/installers/QuotaBar-*-universal.pkg

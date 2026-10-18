@@ -13,13 +13,28 @@ A native macOS menu bar app for tracking AI quotas and daily token usage across 
 - **菜单栏选项**：仅显示图标，或固定显示某项剩余额度；支持开机启动及可选的低额度提醒。
 - **原生体验**：Swift、SwiftUI 与 AppKit，支持浅色和深色模式；统一卡片与状态标识，提供用量总览和可选日期的趋势图。
 
-## 环境要求
+## 安装（推荐）
 
-- macOS 13 或更高版本。
-- Apple Command Line Tools 或 Xcode；本项目已在 Swift 5.8.1 下验证。
-- 额度查询需要对应服务已有的本机登录或 Coding Plan API Key。
+支持 **macOS 13 及以上**，安装包为 **Universal 2**，同时支持 Intel 和 Apple Silicon。直接安装无需 Xcode 或 Command Line Tools。
 
-## 构建和运行
+1. 下载 [QuotaBar 1.0.3 安装包](https://github.com/danchaofan/quotabar/raw/refs/heads/main/installers/QuotaBar-1.0.3-universal.pkg)。
+2. 如果已有旧版运行，先右键菜单栏图标，选择「退出额度看板」。
+3. 双击 `.pkg`，按安装向导完成安装。应用固定安装到 `/Applications/额度看板.app`，安装过程可能要求管理员密码。
+4. 在「应用程序」中打开「额度看板」。点击顶部菜单栏的柱状图图标使用；Dock 不显示图标。
+
+升级会保留原有设置、账号连接和本机用量汇总。查询额度仍需要相应服务已有的本机登录或 Coding Plan API Key。点击面板外可收起，右键菜单栏图标可刷新、设置或退出；开机启动可在应用设置中开启。
+
+当前应用使用 ad-hoc 签名，安装包尚未使用 Apple Developer 分发签名或公证。如果 macOS 拦截安装或首次启动，请确认下载来自本仓库，再到「系统设置 → 隐私与安全性」选择「仍要打开」。
+
+安装包及其 [SHA-256 校验文件](installers/QuotaBar-1.0.3-universal.pkg.sha256) 均保存在仓库 `installers/` 中。将两者下载到同一目录后，可选运行：
+
+```sh
+shasum -a 256 -c QuotaBar-1.0.3-universal.pkg.sha256
+```
+
+## 从源码构建
+
+需要 macOS 13 及以上，以及 Apple Command Line Tools 或 Xcode；本项目已在 Swift 5.8.1 下验证。
 
 ```sh
 git clone https://github.com/danchaofan/quotabar.git
@@ -28,16 +43,27 @@ bash build.sh
 open "dist/额度看板.app"
 ```
 
-构建脚本针对当前 Mac 架构编译。生成的应用位于 `dist/`，构建缓存位于 `.build/`，两者均不会纳入 Git。应用使用本地 ad-hoc 签名，尚未提供 Apple Developer 分发签名或公证。
+`build.sh` 默认针对当前 Mac 架构编译。应用生成在 `dist/`，构建缓存位于 `.build/`，两者均不会纳入 Git。可将生成的 app 移入「应用程序」后启用开机启动。
 
-可将生成的 app 移入「应用程序」，再从设置中启用开机启动。点击图标外的区域可收起面板；右键菜单栏图标可刷新、设置或退出。
-
-支持覆盖输出和缓存目录：
+如需生成同样的 Universal 2 安装包：
 
 ```sh
+bash package.sh
+```
+
+脚本会重新构建 `arm64` 和 `x86_64`、合并应用、运行离线检查，再生成 `installers/QuotaBar-<版本>-universal.pkg` 及 SHA-256 校验文件。安装内容只有应用本身，不包含当前电脑的登录、设置或用量文件。安装器不运行额外安装脚本。
+
+支持覆盖应用输出、构建缓存及安装包目录：
+
+```sh
+QUOTABAR_ARCHS="arm64 x86_64" \
 QUOTABAR_OUTPUT_DIR=/tmp/quotabar-dist \
 QUOTABAR_BUILD_DIR=/tmp/quotabar-build \
 bash build.sh
+
+QUOTABAR_BUILD_DIR=/tmp/quotabar-build \
+QUOTABAR_PACKAGE_DIR=/tmp/quotabar-installers \
+bash package.sh
 ```
 
 ## 账号连接
@@ -69,7 +95,7 @@ bash build.sh
 - 手动输入的智谱密钥保存到 macOS 钥匙串；本机客户端的登录由其自身管理。
 - 本地日志解析只提取用量，应用不保存对话正文。
 - 最近额度和每日数值汇总保存在 `~/Library/Application Support/QuotaBar/`，不会作为项目文件提交。
-- `.gitignore` 排除了凭据文件、日志、数据库、CSV 导出、构建产物和本地调研快照。
+- `.gitignore` 排除了凭据文件、日志、数据库、CSV 导出、应用构建目录和本地调研快照；`installers/` 仅收录明确发布的安装包与校验文件。
 
 诊断输出和导出的 CSV 包含个人用量。分享前请自行检查，不要把它们提交到仓库。
 
@@ -106,7 +132,10 @@ Sources/
   Diagnostics.swift   诊断入口与合成数据回归检查
 Info.plist
 MakeIcon.swift        图标生成
-build.sh
+build.sh              构建应用
+package.sh            构建 Universal 2 安装包
+packaging/            安装器配置与说明
+installers/           已发布的 pkg 与 SHA-256 校验文件
 ```
 
 ## 接口参考
