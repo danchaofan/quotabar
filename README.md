@@ -17,7 +17,7 @@ A native macOS menu bar app for tracking AI quotas and daily token usage across 
 
 支持 **macOS 13 及以上**，安装包为 **Universal 2**，同时支持 Intel 和 Apple Silicon。直接安装无需 Xcode 或 Command Line Tools。
 
-1. 下载 [QuotaBar 1.0.3 安装包](https://github.com/danchaofan/quotabar/raw/refs/heads/main/installers/QuotaBar-1.0.3-universal.pkg)。
+1. 下载 [QuotaBar 1.0.3 安装包](https://raw.githubusercontent.com/danchaofan/quotabar/main/installers/QuotaBar-1.0.3-universal.pkg)。
 2. 如果已有旧版运行，先右键菜单栏图标，选择「退出额度看板」。
 3. 双击 `.pkg`，按安装向导完成安装。应用固定安装到 `/Applications/额度看板.app`，安装过程可能要求管理员密码。
 4. 在「应用程序」中打开「额度看板」。点击顶部菜单栏的柱状图图标使用；Dock 不显示图标。
