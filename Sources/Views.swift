@@ -345,23 +345,71 @@ struct UsageVendorRow: View {
     let vendor: Vendor
     let rows: [DailyUsage]
     let health: [SourceHealth]
+    @State private var expanded: Bool
+    @State private var hovered = false
+
+    init(vendor: Vendor, rows: [DailyUsage], health: [SourceHealth], initiallyExpanded: Bool = false) {
+        self.vendor = vendor; self.rows = rows; self.health = health
+        _expanded = State(initialValue: initiallyExpanded)
+    }
+
     private var total: TokenTotals { rows.reduce(into: TokenTotals()) { $0.add($1.totals) } }
+    private var summary: String {
+        total.total > 0 ? Values.compact(total.total) : health.contains { $0.available } ? "暂无记录" : "未连接"
+    }
     var body: some View {
-        DisclosureGroup {
-            VStack(alignment: .leading, spacing: 7) {
-                ForEach(rows) { row in HStack { Text(row.source); Spacer(); Text(row.totals.total.formatted(.number)).monospacedDigit() } }
-                if rows.isEmpty { Text(health.contains { $0.available } ? "当天暂无本机用量记录" : "尚未连接可计量的本机记录").foregroundColor(.secondary) }
-                ForEach(health.filter { !$0.available || $0.records == 0 }) { item in Text(item.title + "：" + item.note).foregroundColor(.secondary) }
-                HStack { Text("缓存写入（输入子集）"); Spacer(); Text(Values.compact(total.cacheWrite)) }.foregroundColor(.secondary)
-            }.font(.system(size: 10)).padding(.top, 10).padding(.leading, 3)
-        } label: {
-            HStack(spacing: 9) {
-                Monogram(vendor: vendor)
-                Text(vendor.shortName).font(.system(size: 11, weight: .medium))
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(.secondary)
+                        .frame(width: 12, height: 16).rotationEffect(.degrees(expanded ? 90 : 0))
+                    Monogram(vendor: vendor)
+                    Text(vendor.shortName).font(.system(size: 12, weight: .medium)).foregroundColor(.primary)
+                    Spacer(minLength: 12)
+                    Text(summary).font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit().foregroundColor(.primary)
+                }.padding(.horizontal, 12).padding(.vertical, 10)
+                    .frame(maxWidth: .infinity).contentShape(Rectangle())
+                    .background(Color.primary.opacity(hovered ? 0.035 : 0))
+            }.buttonStyle(.plain).onHover { hovered = $0 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(vendor.shortName + "，" + summary)
+                .accessibilityValue(expanded ? "已展开" : "已收起")
+                .accessibilityHint("点击整行" + (expanded ? "收起" : "展开") + "来源明细")
+            if expanded { details }
+        }.modifier(Panel()).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Rectangle().fill(Palette.line).frame(height: 1)
+            HStack {
+                Text("来源明细")
                 Spacer()
-                Text(total.total > 0 ? Values.compact(total.total) : health.contains { $0.available } ? "暂无记录" : "未连接").font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+                Text("tokens")
+            }.font(.system(size: 11, weight: .medium)).foregroundColor(.secondary)
+            ForEach(rows) { row in
+                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                    Text(row.source).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text(row.totals.total.formatted(.number)).font(.system(size: 13, weight: .medium, design: .rounded)).monospacedDigit().layoutPriority(1)
+                }
             }
-        }.padding(8).modifier(Panel()).tint(vendor.color)
+            if rows.isEmpty {
+                Text(health.contains { $0.available } ? "当天暂无本机用量记录" : "尚未连接可计量的本机记录").foregroundColor(.secondary)
+            }
+            ForEach(health.filter { !$0.available || $0.records == 0 }) { item in
+                Text(item.title + "：" + item.note).foregroundColor(.secondary)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("缓存写入（输入子集）")
+                Spacer(minLength: 0)
+                Text(Values.compact(total.cacheWrite)).monospacedDigit()
+            }.foregroundColor(.secondary)
+        }.font(.system(size: 12)).lineSpacing(3).textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16).padding(.bottom, 14)
     }
 }
 
@@ -412,7 +460,7 @@ struct SettingsView: View {
                 Text("只读扫描本机记录，仅保存数值汇总，不保存对话正文。缓存 token 属于输入，推理 token 属于输出。普通 ChatGPT 聊天不提供精确 token 记录。").font(.system(size: 10)).foregroundColor(.secondary)
             }
             if !model.connectionMessage.isEmpty { Text(model.connectionMessage).font(.system(size: 11)).foregroundColor(.secondary) }
-            HStack { Text("额度看板 1.0.2 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
+            HStack { Text("额度看板 1.0.3 · macOS 原生客户端").font(.system(size: 10)).foregroundColor(.secondary); Spacer(); Button { model.refreshAll(force: true) } label: { Text("立即刷新").foregroundColor(.primary) } }
             }.formStyle(.grouped)
         }.frame(width: 530, height: 690).background(Palette.canvas).tint(Palette.accent)
     }
